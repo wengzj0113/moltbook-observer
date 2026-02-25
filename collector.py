@@ -98,13 +98,13 @@ def fetch_and_save_posts():
             for u in candidates:
                 try:
                     logger.info(f"Fetching data from {u}...")
-                    r = requests.get(u, headers=headers, timeout=10)
+                    r = requests.get(u, headers=headers, timeout=3)
                     if r.status_code != 200:
                         continue
                     d = r.json()
                     ps = d.get("posts", [])
                     if ps:
-                        return ps
+                        return ps, False
                 except Exception:
                     continue
             fallback_path = os.path.join(os.path.dirname(__file__), "api_response_posts.json")
@@ -115,16 +115,16 @@ def fetch_and_save_posts():
                         ps = d.get("posts", [])
                         if ps:
                             logger.warning("Using cached api_response_posts.json as fallback")
-                            return ps
+                            return ps, True
                 except Exception:
                     pass
-            return []
+            return [], False
 
-        posts = try_fetch()
+        posts, is_offline = try_fetch()
         if not posts:
             logger.error("Failed to fetch posts from all sources")
             return
-        logger.info(f"Fetched {len(posts)} posts. Saving to database...")
+        logger.info(f"Fetched {len(posts)} posts. Mode: {'OFFLINE (No Translate)' if is_offline else 'ONLINE'}. Saving to database...")
         
         new_posts_count = 0
         updated_posts_count = 0
@@ -194,23 +194,29 @@ def fetch_and_save_posts():
             post.title = p.get("title")
             # Translate if new or title changed (simplified: just check if title_zh is empty)
             if post.title and not post.title_zh:
-                post.title_zh = translate_text(post.title, 'zh-CN')
-                post.title_fr = translate_text(post.title, 'fr')
-                post.title_ja = translate_text(post.title, 'ja')
-                post.title_it = translate_text(post.title, 'it')
-                post.title_ru = translate_text(post.title, 'ru')
-                post.title_ko = translate_text(post.title, 'ko')
-                post.title_es = translate_text(post.title, 'es')
+                if is_offline:
+                    post.title_zh = post.title
+                else:
+                    post.title_zh = translate_text(post.title, 'zh-CN')
+                    post.title_fr = translate_text(post.title, 'fr')
+                    post.title_ja = translate_text(post.title, 'ja')
+                    post.title_it = translate_text(post.title, 'it')
+                    post.title_ru = translate_text(post.title, 'ru')
+                    post.title_ko = translate_text(post.title, 'ko')
+                    post.title_es = translate_text(post.title, 'es')
                 
             post.content = p.get("content")
             if post.content and not post.content_zh:
-                 post.content_zh = translate_text(post.content, 'zh-CN')
-                 post.content_fr = translate_text(post.content, 'fr')
-                 post.content_ja = translate_text(post.content, 'ja')
-                 post.content_it = translate_text(post.content, 'it')
-                 post.content_ru = translate_text(post.content, 'ru')
-                 post.content_ko = translate_text(post.content, 'ko')
-                 post.content_es = translate_text(post.content, 'es')
+                 if is_offline:
+                     post.content_zh = post.content
+                 else:
+                     post.content_zh = translate_text(post.content, 'zh-CN')
+                     post.content_fr = translate_text(post.content, 'fr')
+                     post.content_ja = translate_text(post.content, 'ja')
+                     post.content_it = translate_text(post.content, 'it')
+                     post.content_ru = translate_text(post.content, 'ru')
+                     post.content_ko = translate_text(post.content, 'ko')
+                     post.content_es = translate_text(post.content, 'es')
 
             post.type = p.get("type")
             post.author_id = author.id
@@ -260,7 +266,10 @@ def fetch_and_save_posts():
                     comment.content = c.get("content")
                     # Translate Comment Content (Simplified: Only Chinese)
                     if comment.content and not comment.content_zh:
-                        comment.content_zh = translate_text(comment.content, 'zh-CN')
+                        if is_offline:
+                            comment.content_zh = comment.content
+                        else:
+                            comment.content_zh = translate_text(comment.content, 'zh-CN')
                         
                     comment.author_id = c_author_id
                     comment.post_id = post_id
