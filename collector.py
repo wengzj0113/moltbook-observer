@@ -114,7 +114,7 @@ def fetch_and_save_posts():
                     d = r.json()
                     ps = d.get("posts", [])
                     if ps:
-                        return ps
+                        return ps, False
                 except Exception as e:
                     logger.warning(f"Exception fetching from {u}: {e}")
                     continue
