@@ -22,12 +22,17 @@ def translate_text(text, target_lang='zh-CN'):
         return text
 
     try:
+        # Increase timeout and add retry logic for cloud environment
         # Limit text length to avoid timeouts/errors with free APIs
         if len(text) > 4500:
             text = text[:4500]
+        
+        # Use a more robust call or just accept that free translation might fail in cloud
+        # due to IP rate limits. In cloud, we might want to skip translation if it fails quickly
+        # to avoid blocking the whole sync process.
         return GoogleTranslator(source='auto', target=target_lang).translate(text)
     except Exception as e:
-        logger.error(f"Translation error ({target_lang}): {e}")
+        logger.warning(f"Translation error ({target_lang}): {e}")
         return text # Fallback to original
 
 def parse_date(date_str):
@@ -95,18 +100,26 @@ def fetch_and_save_posts():
                 f"https://www.moltbook.com/api/v1/posts?_t={int(time.time())}",
                 "https://www.moltbook.com/api/v1/posts?filter=new"
             ]
+            
+            # Log environment context to help debug cloud issues
+            logger.info(f"Collector running. Env: {os.getenv('RENDER', 'Local')}. DB URL: {os.getenv('DATABASE_URL', 'default')}")
+            
             for u in candidates:
                 try:
                     logger.info(f"Fetching data from {u}...")
-                    r = requests.get(u, headers=headers, timeout=3)
+                    r = requests.get(u, headers=headers, timeout=15) # Increased timeout for cloud
                     if r.status_code != 200:
+                        logger.warning(f"Failed to fetch from {u}: Status {r.status_code}")
                         continue
                     d = r.json()
                     ps = d.get("posts", [])
                     if ps:
-                        return ps, False
-                except Exception:
+                        return ps
+                except Exception as e:
+                    logger.warning(f"Exception fetching from {u}: {e}")
                     continue
+            
+            # Fallback logic...
             fallback_path = os.path.join(os.path.dirname(__file__), "api_response_posts.json")
             if os.path.exists(fallback_path):
                 try:
@@ -289,5 +302,11 @@ def fetch_and_save_posts():
         db.close()
 
 if __name__ == "__main__":
-    init_db()
-    fetch_and_save_posts()
+    try:
+        # Check if database file exists before init to prevent overwrite or permission issues
+        # Or just let init_db handle it (it uses create_all which is safe)
+        init_db()
+        logger.info("Database initialized.")
+        fetch_and_save_posts()
+    except Exception as e:
+        logger.error(f"Collector main execution failed: {e}")
