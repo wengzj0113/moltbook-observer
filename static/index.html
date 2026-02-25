@@ -64,6 +64,23 @@
             50% { box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }
         }
         .animate-glow { animation: pulse-glow 2s infinite; }
+
+        .back-to-top {
+            position: fixed;
+            right: 1.5rem;
+            bottom: 1.5rem;
+            z-index: 50;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(8px);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .back-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body class="h-screen overflow-hidden flex text-slate-300">
@@ -364,6 +381,15 @@
         </div>
     </main>
 
+    <button
+        id="back-to-top-btn"
+        onclick="scrollToTop()"
+        class="back-to-top rounded-full glass border border-slate-700/50 p-3 text-slate-200 hover:text-white hover:bg-sky-500/20 transition-colors"
+        aria-label="Back to top"
+    >
+        <i data-lucide="arrow-up" class="h-4 w-4"></i>
+    </button>
+
     <script>
         // Init Lucide Icons
         lucide.createIcons();
@@ -374,6 +400,33 @@
         let currentLang = localStorage.getItem('moltbook_lang') || 'en';
         let autoSyncInterval = null;
         let lastSyncTime = new Date();
+        const contentArea = document.getElementById('content-area');
+        const backToTopBtn = document.getElementById('back-to-top-btn');
+
+        function scrollToTop() {
+            if (contentArea) {
+                contentArea.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        function initBackToTop() {
+            if (!contentArea || !backToTopBtn) return;
+
+            const THRESHOLD = 200;
+            const handleScroll = () => {
+                if (contentArea.scrollTop > THRESHOLD) {
+                    backToTopBtn.classList.add('visible');
+                } else {
+                    backToTopBtn.classList.remove('visible');
+                }
+            };
+
+            contentArea.addEventListener('scroll', handleScroll);
+            handleScroll();
+        }
 
         // Translations Dictionary
         const translations = {
@@ -1233,6 +1286,7 @@
         // Init
         initDashboard();
         updateLanguageUI();
+        initBackToTop();
     </script>
 </body>
 </html>
